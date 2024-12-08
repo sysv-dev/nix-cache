@@ -1,0 +1,130 @@
+name: Build
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+jobs:
+  stdenv:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [nixos-24-11, nixos-unstable]
+        platform: [aarch64-linux, x86_64-linux]
+    env:
+      TEMP_STORE: /tmp/nix-cache
+      TEMP_STORE_ARGS: compression=zstd&parallel-compression=true&priority=100
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup binary cache
+        env:
+          STORE_SSH_KEY: ${{ secrets.STORE_SSH_KEY }}
+          STORE_SECRET_KEY: ${{ secrets.STORE_SECRET_KEY }}
+        run: |
+          eval $(ssh-agent)
+
+          mkdir -p ~/.ssh
+          echo "$STORE_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-add ~/.ssh/id_ed25519
+
+          cat >> ~/.ssh/config << EOF
+          Host nix-store
+            HostName ${{ secrets.STORE_SSH_HOST }}
+            Port 23
+            User ${{ secrets.STORE_SSH_USER }}
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking accept-new
+          EOF
+
+          sudo mkdir -p /etc/nix
+          echo "$STORE_SECRET_KEY" | sudo tee /etc/nix/secret.key > /dev/null
+
+          cat << 'EOF' | sudo tee /etc/nix/post-build-hook > /dev/null
+          #!/usr/bin/env bash
+          set -eou
+          echo "$OUT_PATHS" | tr ' ' '\n' >> /etc/nix/paths-built
+          EOF
+
+          sudo chmod +x /etc/nix/post-build-hook
+          sudo touch /etc/nix/paths-built
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            extra-substituters = ${{ secrets.STORE_URL }}?priority=100
+            extra-trusted-public-keys = ${{ secrets.STORE_PUBLIC_KEY }}
+            post-build-hook = /etc/nix/post-build-hook
+            secret-key-files = /etc/nix/secret.key
+
+      - run: nix build --keep-going .#stdenv-${{ matrix.channel }}-${{ matrix.platform }}
+
+      - name: Upload binary cache
+        if: ${{ always() }}
+        run: |
+          cat /etc/nix/paths-built | nix copy --to file://${TEMP_STORE}?${TEMP_STORE_ARGS} --stdin
+          rsync --archive --recursive --ignore-existing --out-format "%o: %f" ${TEMP_STORE}/ nix-store:/home/
+
+  packages:
+    runs-on: macos-latest
+    needs: stdenv
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [nixos-24-11, nixos-unstable]
+        platform: [aarch64-linux, x86_64-linux]
+    env:
+      TEMP_STORE: /tmp/nix-cache
+      TEMP_STORE_ARGS: compression=zstd&parallel-compression=true&priority=100
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup binary cache
+        env:
+          STORE_SSH_KEY: ${{ secrets.STORE_SSH_KEY }}
+          STORE_SECRET_KEY: ${{ secrets.STORE_SECRET_KEY }}
+        run: |
+          eval $(ssh-agent)
+
+          mkdir -p ~/.ssh
+          echo "$STORE_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-add ~/.ssh/id_ed25519
+
+          cat >> ~/.ssh/config << EOF
+          Host nix-store
+            HostName ${{ secrets.STORE_SSH_HOST }}
+            Port 23
+            User ${{ secrets.STORE_SSH_USER }}
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking accept-new
+          EOF
+
+          sudo mkdir -p /etc/nix
+          echo "$STORE_SECRET_KEY" | sudo tee /etc/nix/secret.key > /dev/null
+
+          cat << 'EOF' | sudo tee /etc/nix/post-build-hook > /dev/null
+          #!/usr/bin/env bash
+          set -eou
+          echo "$OUT_PATHS" | tr ' ' '\n' >> /etc/nix/paths-built
+          EOF
+
+          sudo chmod +x /etc/nix/post-build-hook
+          sudo touch /etc/nix/paths-built
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            extra-substituters = ${{ secrets.STORE_URL }}?priority=100
+            extra-trusted-public-keys = ${{ secrets.STORE_PUBLIC_KEY }}
+            post-build-hook = /etc/nix/post-build-hook
+            secret-key-files = /etc/nix/secret.key
+
+      - run: nix build --keep-going .#packages-${{ matrix.channel }}-${{ matrix.platform }}
+
+      - name: Upload binary cache
+        if: ${{ always() }}
+        run: |
+          cat /etc/nix/paths-built | nix copy --to file://${TEMP_STORE}?${TEMP_STORE_ARGS} --stdin
+          rsync --archive --recursive --ignore-existing --out-format "%o: %f" ${TEMP_STORE}/ nix-store:/home/
