@@ -1,0 +1,25 @@
+name: Update
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "45 4 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+      - name: Update flake.lock
+        id: update
+        uses: DeterminateSystems/update-flake-lock@main
+      - name: Merge pull request
+        run: "gh pr merge --auto --merge ${{ steps.update.outputs.pull-request-number }} || true"
+        env:
+          GH_TOKEN: ${{ github.token }}
