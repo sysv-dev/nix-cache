@@ -2,7 +2,7 @@
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixos-24-11.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixos-25-05.url = "github:NixOS/nixpkgs/nixos-25.05";
   };
 
   outputs = inputs@{ flake-parts, ... }:
@@ -11,7 +11,7 @@
       perSystem = { lib, inputs', ... }:
         let
           pkgsUnstable = inputs'.nixpkgs.legacyPackages;
-          pkgs2411 = inputs'.nixos-24-11.legacyPackages;
+          pkgs2411 = inputs'.nixos-25-05.legacyPackages;
 
           linkFarmAttrs = pkgs: name: attrs:
             pkgs.linkFarm name (lib.mapAttrsToList (name: path: { inherit name path; }) attrs);
@@ -49,13 +49,13 @@
           packages = {
             stdenv-nixos-unstable-aarch64-linux = stdenvFor pkgsUnstable.pkgsCross.aarch64-multiplatform;
             stdenv-nixos-unstable-x86_64-linux = stdenvFor pkgsUnstable.pkgsCross.gnu64;
-            stdenv-nixos-24-11-aarch64-linux = stdenvFor pkgs2411.pkgsCross.aarch64-multiplatform;
-            stdenv-nixos-24-11-x86_64-linux = stdenvFor pkgs2411.pkgsCross.gnu64;
+            stdenv-nixos-25-05-aarch64-linux = stdenvFor pkgs2411.pkgsCross.aarch64-multiplatform;
+            stdenv-nixos-25-05-x86_64-linux = stdenvFor pkgs2411.pkgsCross.gnu64;
 
             packages-nixos-unstable-aarch64-linux = packagesFor pkgsUnstable.pkgsCross.aarch64-multiplatform;
             packages-nixos-unstable-x86_64-linux = packagesFor pkgsUnstable.pkgsCross.gnu64;
-            packages-nixos-24-11-aarch64-linux = packagesFor pkgs2411.pkgsCross.aarch64-multiplatform;
-            packages-nixos-24-11-x86_64-linux = packagesFor pkgs2411.pkgsCross.gnu64;
+            packages-nixos-25-05-aarch64-linux = packagesFor pkgs2411.pkgsCross.aarch64-multiplatform;
+            packages-nixos-25-05-x86_64-linux = packagesFor pkgs2411.pkgsCross.gnu64;
           };
         };
     };
